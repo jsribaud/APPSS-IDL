@@ -1,0 +1,21 @@
+This is the home directory for routines developed to
+examine the data acquired for LBW followup of ALFALFA.
+
+Update history:
+26Jan2012:   Directory created: mph
+14Nov2012:   Updated calls to observing program from a2669 to a2707
+19Jan2013:   Updated with new stuff from UAT13
+20Dec2013:   Updated with full fitting routines, new plotting, etc.
+04Jun2014:   Updated with several bug fixes and additional features
+25Nov2014:   Updated with WAPPS observing code.
+09Jul2015:   Updated with VERY PRELIMINARY GPS removal software.
+29Jul2015:   Updated with production-quality GPS removal software
+               File created: lbwremovegps.pro
+               Files changed: lbwfromcorfile.pro, lbwfromwapps.pro, lbwquicklook.pro, lbwquicklookwapps.pro
+29Jul2015:   Begun cleanup of directory and merging of files from Cornell to Arecibo
+               Files removed: readlbw.pro, plotlbw.pro, resetlbw.pro, masklbw.pro, 
+                 markhistory.pro, measurelbw.pro, checklbw.pro_a2752
+30Nov2015:   Added ability to plot both polarization in WAPPS data and to force refresh of files
+             Fileds changed: lbwquicklookwapps.pro, lbwquicklook.pro
+
+Folks, when you enter something in the changelog, pls include your initials. Thx, the management.

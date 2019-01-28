@@ -1,0 +1,222 @@
+This file contains brief documentation for how the idl_lbw code works. 
+
+Documentation History:
+04Jun2014    First created by Luke
+
+*Note: THIS IS NOT INSTRUCTIONS ON HOW TO USE IDL_LBW. All practicle information
+about how to use the code is contained in the LBW reduction instructions found 
+in /home/web/research/projects/egg/alfalfa/ugradteam/lbw/lbw_reduction.htm or 
+http://egg.astro.cornell.edu/alfalfa/ugradteam/lbw/lbw_reduction.htm
+
+###################### SECTION 1: The LBWSRC STRUCTURE #########################
+The idl structure lbwsrc contains all the information on our LBW source.
+lbwsrc structure is created in lbwfromcorfile.pro, and modified in later code.
+Here we include a table of the tagnames with brief explanations of each tag.
+The tags here are divided up into categories for easy reference. The table 
+contains the following columns:
+TAGNAME	   TAG DATATYPE     EXAMPLE     ; COMMENTS  
+
+IDL> help, lbwsrc
+;; Bookkeeping ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;   
+ AGC         LONG             0          ; The AGC Number for the Galaxy
+ LBWSRCNAME  STRING  'H084515.8+250538'  ; The LBW source name
+ CORFILE     STRING  'corfile.24mar12.a2669.38' ; The original name of the corfile
+ FILE        STRING  'H084515.8+250538'  ; Suggested filename to save things to
+ HIRES       INT            0            ; Are we using the high-resolution board?
+ RA          DOUBLE         131.32250    ; Right ascension, in decimal degrees
+ DEC         DOUBLE         25.096665    ; Declination, in decimal degrees
+
+;; Raw spectral information ;;;;;;;;;;;;;;;;;;;
+ SPEC        FLOAT   Array[2048] ; 'Nicest-looking' (smoothed/baselined) spectrum for display
+ RAW         FLOAT   Array[2048]         ; Raw, unsmoothed, low-resolution spectrum in mJy
+ FREQ        DOUBLE  Array[2048]         ; Array of frequencies, in MHz (one value/channel)
+ VEL         DOUBLE  Array[2048]         ; Array of velocities, in km/s (one value/channel)
+ NCHAN       LONG            2048        ; Number of channels
+ BANDWIDTH   DOUBLE         24.987793    ; Spectral bandwidth in MHz
+
+;; Baseline information ;;;;;;;;;;;;;;;;;;;;;;;
+ MASK        INT     Array[2048]         ; Array of channels to include in baseline fitting
+ BASELINE    DOUBLE  Array[2048]         ; Fitted channel-by-channel baseline
+ BLFIT       STRUCT  -> <Anonymous> Array[1] ; Structure related to baseline fitting
+IDL> help,lbwsrc.blfit
+   FITFLAG     INT              1        ; Has the baseline been fit yet?
+   ORDER       INT              3        ; Order of the fit
+   COEF        DOUBLE    Array[10] ; Coefficients of the fit, in units of mJy / (km/s)^(order)
+ CONTINUUM   FLOAT         0.00000       ; Mean value of continuum emission (mJy)
+
+;; Smoothed spectrum information ;;;;;;;;;;;;;;
+ WINDOW      STRING  'b3'     ; How smoothing was produced, 'h'=hanning,'bX'=boxcar, width X)
+ RMS         FLOAT         1.04939       ; rms values of the smoothed spectra
+
+;; Source and fit information ;;;;;;;;;;;;;;;;;
+;; See the measuring source parameters section below for more information on how
+;  these parameters are determined
+ FITTYPE     STRING  'P'                  ; Fit type: Two-Horned (P) or Gaussian (G)
+ FITEDGE     FLOAT   Array[4]         ; Edges of regions selected by user during measurements
+ W50         FLOAT         13.4881        ; Full width at half of peak emission
+ W50ERR      FLOAT         14.5658        ; Error on W50
+ W20         FLOAT         20.6400        ; Full width at 20% of peak emission
+ W20ERR      FLOAT         14.5658        ; Error on W20
+ VSYS        FLOAT        -223.226        ; Systemic velocity of the signal (optical definition)
+ VSYSERR     FLOAT         10.2996        ; Error on systemic velocity
+ FLUX        FLOAT      0.00257073        ; Integrated flux density
+ FLUXERR     FLOAT       0.0179387        ; Error on the integrated flux density
+ COMMENTS    STRUCT  -> <Anonymous> Array[1] ; User comments
+IDL> help,lbwsrc.comments
+   TEXT        STRING  Array[50]           ; The actual text of the comments
+   COUNT       LONG            5           ; The number of comments currently in the structure
+ SN          FLOAT        0.121641         ; Signal to Noise ratio
+ YRANGE      INT     Array[2]              ; Default plotting range
+
+#################### SECTION 2: NOTES ON THE PROCEDURE #########################
+0. corinit and lbwinit compile all the necessary lbw procedures. 
+*Note: THIS IS NOT INSTRUCTIONS ON HOW TO USE IDL_LBW. Please see 
+/home/web/research/projects/egg/alfalfa/ugradteam/lbw/lbw_reduction.htm or 
+http://egg.astro.cornell.edu/alfalfa/ugradteam/lbw/lbw_reduction.htm for user 
+instructions.
+
+1. LBWFROMCORFILE: Reading in corfiles
+The corfiles output by the interim correlator are read into a structure called
+lbwsrc by the code lbwfromcorfile.pro, which contains detailed information on
+the contents and structure of the lbwsrc structure. Note that the working 
+spectrum saved in lbwsrc.spec is automatically Hanning smoothed at the end of
+this procedure, but the raw spectrum remains untouched. 
+
+
+2. LBWSMOOTH: Smoothing  the spectrum
+The spectrum is smoothed by the procedure lbwsmooth. lbwsmooth ALWAYS takes
+the raw spectrum stored in lbwsrc.raw, subtracts the measured baseline stored in
+lbw.baseline, and then smooths to specifications, updating lbw.spec. 
+If the baseline hasn't been measured yet, then lbw.baseline is just an array of 
+0s, so then lbwsmooth is just smoothing the raw spectrum.
+
+lbwsmooth is the only routine that updates lbwsrc.rms, i.e. other procedures 
+call lbwsmooth to calculate the rms. Thus the rms only has meaning for a 
+specific smoothing, by default Hanning smoothing to width 3. 
+
+Note that the code always Hanning smooths, and optionally does boxcar smoothing
+of user specified width on the Hanning smoothed spectrum. This is meant to be
+in line with Springob+ 2005. 
+
+Further note that if you don't want to overwrite the spectrum you can run 
+lbwsmooth with the /noreplace keyword, and it will not overwrite any values in 
+the lbwsrc structure. This is used in the lbwplot procedure for plotting spectra
+with various smoothings applied without actually changing the lbwsrc structure.
+
+
+3. LBWBASELINE: Baselining the spectrum and calculating the spectrum rms
+The baselines are calculated in the code stored in lbwbaseline.pro, which has 
+a main procedure, lbwbaseline, which calls two subprocedures, fitpolylbw and 
+lbwmask. lbwmask puts a "mask" on the spectrum, that is, it selects out the part
+of the spectrum to be used for the baseline fit. fitpolylbw uses the standard 
+idl routine poly_fit which produces the polynomial coefficients. lbwbaseline
+first asks the user to select emission/RFI-free regions, and then produces 
+polynomials of different orders, overplotting them on the spectrum and asking
+the user to choose the best fit.
+
+4. LBWMEASURE: fitting the source and measuring its parameters
+The source values are measured using the code in lbwmeasure.pro, which contains
+several procedures and functions:
+	GAUSS1.		 - this is the function that describes the gaussian we
+			use to do the gaussian fitting. 
+	MYGAUSS.	 - a second function that interacts with gauss1 and 
+			mpfitfun in the gaussian fitting. MYGAUSS and GAUSS1 are
+			taken from Craig Markwardt's MPFITFUN gaussian fitting
+			tutorial at 
+			http://www.physics.wisc.edu/~craigm/idl/mpfittut.html
+	CLOSEST.	 - A function that finds the element of ARRAY that is 
+			the closest in value to some VALUE and returns the index
+			of the ARRAY for that element. Written by Trevor 
+			Harris, University of Adelaide, July, 1990.
+	MARKREGION.      - this is a procedure that gets called every time the
+			user needs to select a region for fitting. It interacts
+			with the user, selecting and plotting the fitting 
+			regions.
+	EDGEFIT.         - this is a workhorse procedure that calculated a 
+			linear fit to the edge of a spectral profile (used in
+			the two horned fitting method).
+	CALCULATELAMBDA. - this is a function that calculates lambda values 
+			based on table 2 of Springob 2005. The idea here is to 
+			correct the W50 for the effect of smoothing based on 
+			the signal to noise, the spectra resolution, and the 
+			amount/type of smoothing.
+	TWOPEAKFIT.      - this is the procedure that actually does the 2 peak 
+			fit 
+	LBWMEASURE.      - this is the main procedure that calls all the others
+
+The main procedure lbwmeasure checks the user input, asks the user to determine
+an appropriate zoom, and the calculates either a two-horned fit or a gaussian 
+fit to the observed line. For the gaussian fit the code calls markregion and
+asks the user to click on either side of the source. It then calls mpfitfun 
+which does a least squares minimization to fit the best gaussian. Note that the
+fit region includes the region used for the baseline fit and the source region 
+since the gaussian fit includes a 0th order offset term.  
+
+The two horned fit works similarly to the ALFALFA two horned fitting algorithm.
+The basic procedure is that the user clicks on either side of the edge of a 
+spectral line. The code then looks at the points within the specified region,
+cuts out the points in the top 1 rms, and then does a linear fit to the points 
+within the 15 to 85% flux levels. It repeats the same process for the other side
+of the line. Once it has both lines it uses them to calculate the flux, systemic 
+velocity, and other parameters as detailed below in the measuring source 
+parameters section.
+
+
+################## SECTION 3: MEASURING SOURCE PARAMETERS ######################
+This section describes how the code determines the fitted source parameters. 
+Note that the gaussian and two-horned fitting methods are fundametally 
+different, and so the parameters from the two fits should be used with caution.
+The two methods reflect the methods used in the ALFALFA survey (Giovanelli+2005).
+
+1. For two horned fitting:
+Calculating the flux:
+After finding a linear fit to both sides of the spectral line, the code 
+determines the limits of integration by finding where the fit lines cross 0, and 
+itegrating from the left zero crossing to the right zero crossing by summing 
+F*dv for each channel. The final flux is then converted from mJy km/s to Jy km/s.
+The flux error is calculated by taking 2*(rms/1000)*sqrt(1.4*W50*deltav).
+
+Calculating the signal to noise:
+SN = 1000*totflux/W50*sqrt( (W50 < 400.)/20. ) / lbwsrc.rms
+
+Calculating the systemic velocity:
+vsys is calculated by finding the velocity corresponding to the 50% flux level 
+on the linear fit to each side, and then taking the average velocity of those
+two velocities. 
+vsys20 is calculated in the same was as vsys50, just using the 20% flux level.
+The error in the systemic velocity is just the error in the velocity width 
+divided by the sqrt(2).
+
+Calculating the velocity width:
+W50 is found by finding the velocity corresponding to the 50% flux level on the
+linear fit to each side, and then by taking the different in the two velocities.
+W50 is then corrected for noise, smoothing, and instrumental broadening effects
+a la Springob 2005 (table 2). The code calculates a rough signal to noise 
+estimate to determine the lambda parameter, and then subtracts off the 
+broadening by the equation: W50 = W50 - 2*deltav*lambda where deltav is the 
+channel width and lambda is the lambda parameter from Springob's table.
+W20 is calculated in the same was as W50, just using the 20% flux level.
+
+The error in the velocity width is calculated by adding the error in the linear
+fits to each side of the spectrum in quadrature.
+
+2. For the gaussian fitting:
+The gaussian fitting procedure makes rough guesses at the values for the peak,
+center, and area of the gaussian, and then performs a least squares minimization
+for the best gaussian. The gaussian full width half max is computed via
+GFWHM = 2.35482*sigma, and then assigned to W50. The error in the FWHM is 
+computed from the covariance matrix, and assigned to W50err: 
+W50err = GFWHMerr = 2.35482*sqrt(abs(COV[2,2]))
+Similarly W20 and W20error were calculated via:
+W20 = 2*sqrt(2*alog(5))*sigma
+W20err = 2*sqrt(2*alog(5))*sqrt(abs(COV[2,2]))
+
+The systemic velocity is just the location of the central peak of the gaussian,
+with the error again coming from the covariance matrix. 
+
+The flux is just the fitted area under the curve from MPFITFUN, and the flux
+error also comes from the covariance matrix. 
+
+The signal to noise is calculated as peakflux/rms where the peakflux is 
+calculated via peakflux = area/(sigma * sqrt(2pi)).
+

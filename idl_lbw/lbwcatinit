@@ -1,0 +1,15 @@
+.com lbwdistcatalog
+
+;idl_alfa='/home/dorado3/galaxy/idl_alfa/'
+idl_alfa='/share/a2010/idl/idl_alfa/'
+addpath, idl_alfa
+common agcshare, agcdir
+agcdir=idl_alfa
+
+
+.comp flowmodel_dist.pro
+.comp vhel2cmb.pro
+.comp distance_subroutines.pro
+.comp distance_guess.pro
+.comp distance_catalog.pro
+
